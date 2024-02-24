@@ -1,0 +1,71 @@
+SELECT *
+FROM data_mart.weekly_sales
+LIMIT 10;
+
+--1 What range of week numbers are missing from the dataset?
+with ct1 as(
+select distinct date_part('week',to_date(week_date, 'YYYY-MM-DD')) as n from data_mart.weekly_sales  
+),
+ct2 as(
+select generate_series(1,53) as s
+)
+select distinct ct2.s from ct2, ct1 where ct2.s not in (select n from ct1);
+
+--2 How many total transactions were there for each year in the dataset?
+SELECT DATE_PART('YEAR', to_date(week_date, 'DD-MM-YYYY')) AS YEAR, SUM(SALES) AS TOTAL_TRANSACTION from data_mart.weekly_sales
+GROUP BY DATE_PART('YEAR', to_date(week_date, 'DD-MM-YYYY'));
+
+--3 What is the total sales for each region for each month?
+SELECT region, date_part('month',to_date(week_date, 'DD-MM-YYYY')) as month , sum(sales) from data_mart.weekly_sales
+group by region, date_part('month',to_date(week_date, 'DD-MM-YYYY'));
+
+--4 What is the total count of transactions for each platform
+select platform, count(1) as total from data_mart.weekly_sales
+group by platform;
+
+--5 Which age_band and demographic values contribute the most to Retail sales?
+select segment, count(1) from data_mart.weekly_sales
+where platform='Retail' and segment<>'null'
+group by segment;
+
+WITH CT1 AS(
+select substring(segment,0,2) AS AGE_BAND, SUBSTRING(SEGMENT,2,3) AS DEMOGRAPHY FROM data_mart.weekly_sales WHERE platform='Retail' and segment<>'null'
+)
+SELECT AGE_BAND, DEMOGRAPHY , COUNT(1) FROM CT1 GROUP BY 
+AGE_BAND, DEMOGRAPHY;
+
+--6 We would include all week_date values for 2020-06-15 as the start of the period after the change and the previous week_date values would be before
+--What is the total sales for the 4 weeks before and after 2020-06-15?
+
+ with ct1 as(
+ SELECT sum(sales) as total_sale_before FROM DATA_MART.WEEKLY_SALES 
+ WHERE TO_DATE(WEEK_DATE,'DD-MM-YY') < TO_DATE('15-06-20','DD-MM-YY') AND TO_DATE(WEEK_DATE,'DD-MM-YY') > TO_DATE('15-06-20','DD-MM-YY') - INTERVAL ' 4 WEEK'
+  ),
+  ct2 as(
+    SELECT sum(sales) as total_sale_after FROM DATA_MART.WEEKLY_SALES 
+ WHERE TO_DATE(WEEK_DATE,'DD-MM-YY') > TO_DATE('15-06-20','DD-MM-YY') AND TO_DATE(WEEK_DATE,'DD-MM-YY') < TO_DATE('15-06-20','DD-MM-YY') + INTERVAL ' 4 WEEK'
+   )
+   select * from ct1, ct2;
+   
+--7 What about the entire 12 weeks before and after?
+with ct1 as(
+ SELECT sum(sales) as total_sale_before FROM DATA_MART.WEEKLY_SALES 
+ WHERE TO_DATE(WEEK_DATE,'DD-MM-YY') < TO_DATE('15-06-20','DD-MM-YY') AND TO_DATE(WEEK_DATE,'DD-MM-YY') > TO_DATE('15-06-20','DD-MM-YY') - INTERVAL ' 12 WEEK'
+  ),
+  ct2 as(
+    SELECT sum(sales) as total_sale_after FROM DATA_MART.WEEKLY_SALES 
+ WHERE TO_DATE(WEEK_DATE,'DD-MM-YY') > TO_DATE('15-06-20','DD-MM-YY') AND TO_DATE(WEEK_DATE,'DD-MM-YY') < TO_DATE('15-06-20','DD-MM-YY') + INTERVAL '12 WEEK'
+   )
+   select * from ct1, ct2;
+   
+--8 What is the percentage of sales by demographic for each year in the dataset?
+with ct1 as(
+select DATE_PART('YEAR', to_date(week_date, 'DD-MM-YYYY')) as year, substring(segment,0,2) as demography,
+sum(sales) as sales
+from data_mart.weekly_sales
+group by substring(segment,0,2), DATE_PART('YEAR', to_date(week_date, 'DD-MM-YYYY'))
+order by DATE_PART('YEAR', to_date(week_date, 'DD-MM-YYYY'))
+ )
+ select year, demography, round(sales/ SUM(sales) OVER (PARTITION BY year)*100.0,2) AS percentage_of_sales from ct1 
+ group by demography, year, sales
+ORDER BY year, demography;
